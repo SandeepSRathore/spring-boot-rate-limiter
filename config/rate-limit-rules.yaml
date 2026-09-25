@@ -1,0 +1,76 @@
+# Rate limiting rules, stored on disk (System Design Interview, Ch. 4, "Rate limiting rules").
+# RulesRefreshWorker re-reads this file every `ratelimiter.rules-refresh-interval`: edits apply without a restart.
+#
+# name          unique rule name (part of the Redis key)
+# match.path    Spring path pattern; match.methods optional (all methods if omitted)
+# client-key    what to count against: ip | user (X-User-Id header) | api-key (X-API-Key header)
+# algorithm     token-bucket | leaking-bucket | fixed-window-counter | sliding-window-log | sliding-window-counter
+# rate-limit    unit: second | minute | hour | day
+#               requests-per-unit: allowed requests per unit (refill rate / outflow rate for the bucket algorithms)
+#               bucket-size: token bucket capacity / leaking bucket queue size (defaults to requests-per-unit)
+#
+# All matching rules are checked in file order and all of them must allow the request,
+# so specific rules come first and the catch-all rule last.
+
+rules:
+  # Brute force protection: exact limit, no edge bursts
+  - name: login-per-ip
+    match:
+      path: /api/login
+      methods: [POST]
+    client-key: ip
+    algorithm: sliding-window-log
+    rate-limit:
+      unit: minute
+      requests-per-unit: 5
+
+  # Bursts of up to 5, then 10 per minute on average
+  - name: messages-per-user
+    match:
+      path: /api/messages/**
+    client-key: user
+    algorithm: token-bucket
+    rate-limit:
+      unit: minute
+      requests-per-unit: 10
+      bucket-size: 5
+
+  - name: search-per-user
+    match:
+      path: /api/search
+    client-key: user
+    algorithm: sliding-window-counter
+    rate-limit:
+      unit: minute
+      requests-per-unit: 20
+
+  - name: feed-per-user
+    match:
+      path: /api/feed
+    client-key: user
+    algorithm: fixed-window-counter
+    rate-limit:
+      unit: minute
+      requests-per-unit: 10
+
+  # Steady outflow of 2 orders/second; up to 5 queued (delayed), the rest rejected
+  - name: orders-per-api-key
+    match:
+      path: /api/orders
+      methods: [POST]
+    client-key: api-key
+    algorithm: leaking-bucket
+    rate-limit:
+      unit: second
+      requests-per-unit: 2
+      bucket-size: 5
+
+  # Catch-all limit per user across the whole API
+  - name: api-per-user
+    match:
+      path: /api/**
+    client-key: user
+    algorithm: fixed-window-counter
+    rate-limit:
+      unit: minute
+      requests-per-unit: 100

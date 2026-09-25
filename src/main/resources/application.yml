@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: rate-limiter
+  threads:
+    virtual:
+      enabled: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # The rate limiter sits on every request path, so a slow Redis must fail fast (and fail open)
+      timeout: 250ms
+      connect-timeout: 500ms
+
+ratelimiter:
+  enabled: true
+  # The rules "on disk". Edit the file while the app runs; the worker picks up changes.
+  rules-location: file:config/rate-limit-rules.yaml
+  rules-refresh-interval: 10s
+  fail-open: true
+  trust-forwarded-for: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics

@@ -1,0 +1,24 @@
+rules:
+  - name: login-per-ip
+    match: { path: /api/login, methods: [POST] }
+    client-key: ip
+    algorithm: sliding-window-log
+    rate-limit: { unit: minute, requests-per-unit: 3 }
+
+  - name: messages-per-user
+    match: { path: /api/messages }
+    client-key: user
+    algorithm: token-bucket
+    rate-limit: { unit: minute, requests-per-unit: 2 }
+
+  - name: orders-per-api-key
+    match: { path: /api/orders }
+    client-key: api-key
+    algorithm: leaking-bucket
+    rate-limit: { unit: second, requests-per-unit: 1, bucket-size: 2 }
+
+  - name: api-per-user
+    match: { path: /api/** }
+    client-key: user
+    algorithm: fixed-window-counter
+    rate-limit: { unit: minute, requests-per-unit: 1000 }
